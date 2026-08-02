@@ -4,11 +4,14 @@ import { useApp, computePropertyMetrics } from "@/lib/store";
 import { KpiCard } from "@/components/atoms";
 import { format } from "date-fns";
 import { AlertTriangle, ArrowUpRight, CalendarPlus, Flame, Building2, Zap, Sun, TrendingUp, Sparkles, IndianRupee } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMountedNow } from "@/hooks/use-now";
 import { buildDoNextQueue, liveConfidence, intentFor } from "@/lib/engine";
 import { scanRevivals } from "@/lib/revival";
 import { QuickActionRow } from "@/components/QuickActionRow";
+import { DirectLeadForm } from "@/components/DirectLeadForm";
+import { CRMWorkflowToolbar } from "@/components/CRMWorkflowToolbar";
+import { LeadCard } from "@/components/LeadCard";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,6 +26,9 @@ export const Route = createFileRoute("/")({
 function DashboardPage() {
   const { leads, tours, followUps, properties, role, currentTcmId, selectLead, bookings, handoffs } = useApp();
   const [now, mounted] = useMountedNow();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedArea, setSelectedArea] = useState("ALL");
+  const [selectedStage, setSelectedStage] = useState("ALL");
 
   const filterTcm = role === "tcm" ? currentTcmId : undefined;
   const metrics = useMemo(() => computePropertyMetrics(properties, leads, tours), [properties, leads, tours]);
@@ -49,9 +55,45 @@ function DashboardPage() {
   const monthlyRevenue = bookings.reduce((s, b) => s + b.amount, 0);
   const unreadHandoffs = handoffs.filter((h) => !h.read && h.to === role).length;
 
+  // Filter leads dynamically based on toolbar state
+  const filteredLeads = leads.filter((lead) => {
+    const matchesSearch =
+      lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lead.phone.includes(searchQuery);
+    const matchesArea =
+      selectedArea === "ALL" || lead.preferredArea === selectedArea;
+    const matchesStage =
+      selectedStage === "ALL" || lead.stage === selectedStage;
+
+    return matchesSearch && matchesArea && matchesStage;
+  });
+
   return (
     <AppShell>
       <div className="space-y-6">
+        {/* Step 3: Direct Lead Ingestion Form */}
+        <div className="bg-card p-4 rounded-xl border border-border">
+          <DirectLeadForm />
+        </div>
+
+        {/* Step 4: CRM Toolbar & Lead Cards Grid */}
+        <div className="space-y-4">
+          <CRMWorkflowToolbar
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            selectedArea={selectedArea}
+            setSelectedArea={setSelectedArea}
+            selectedStage={selectedStage}
+            setSelectedStage={setSelectedStage}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredLeads.map((lead) => (
+              <LeadCard key={lead.id} lead={lead} />
+            ))}
+          </div>
+        </div>
+
         <header className="flex items-end justify-between flex-wrap gap-3">
           <div>
             <h1 className="font-display text-2xl font-semibold tracking-tight">Arena Infrastructure</h1>
