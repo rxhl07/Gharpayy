@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { useApp, computePropertyMetrics } from "@/lib/store";
 import { KpiCard } from "@/components/atoms";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowUpRight, CalendarPlus, Flame, Building2, Zap, Sun, TrendingUp, Sparkles, IndianRupee } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, CalendarPlus, Flame, Building2, Zap, Sun, TrendingUp, Sparkles, IndianRupee, ChevronDown, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMountedNow } from "@/hooks/use-now";
 import { buildDoNextQueue, liveConfidence, intentFor } from "@/lib/engine";
@@ -29,6 +29,7 @@ function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedArea, setSelectedArea] = useState("ALL");
   const [selectedStage, setSelectedStage] = useState("ALL");
+  const [isLeadsExpanded, setIsLeadsExpanded] = useState(false);
 
   const filterTcm = role === "tcm" ? currentTcmId : undefined;
   const metrics = useMemo(() => computePropertyMetrics(properties, leads, tours), [properties, leads, tours]);
@@ -68,6 +69,12 @@ function DashboardPage() {
     return matchesSearch && matchesArea && matchesStage;
   });
 
+  // Limit display to 3 cards (1 row on desktop) unless expanded
+  const INITIAL_LEAD_COUNT = 3;
+  const displayedLeads = isLeadsExpanded
+    ? filteredLeads
+    : filteredLeads.slice(0, INITIAL_LEAD_COUNT);
+
   return (
     <AppShell>
       <div className="space-y-6">
@@ -76,7 +83,7 @@ function DashboardPage() {
           <DirectLeadForm />
         </div>
 
-        {/* Step 4: CRM Toolbar & Lead Cards Grid */}
+        {/* Step 4: CRM Toolbar & Collapsible Lead Cards Grid */}
         <div className="space-y-4">
           <CRMWorkflowToolbar
             searchQuery={searchQuery}
@@ -87,11 +94,39 @@ function DashboardPage() {
             setSelectedStage={setSelectedStage}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredLeads.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} />
-            ))}
-          </div>
+          {/* Cards Grid */}
+          {displayedLeads.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded-xl">
+              No leads match your current search/filter criteria.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {displayedLeads.map((lead) => (
+                <LeadCard key={lead.id} lead={lead} />
+              ))}
+            </div>
+          )}
+
+          {/* See More / Show Less Toggle Button */}
+          {filteredLeads.length > INITIAL_LEAD_COUNT && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={() => setIsLeadsExpanded((prev) => !prev)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium text-xs rounded-lg transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+              >
+                {isLeadsExpanded ? (
+                  <>
+                    Show Less <ChevronUp className="h-3.5 w-3.5" />
+                  </>
+                ) : (
+                  <>
+                    See More ({filteredLeads.length - INITIAL_LEAD_COUNT} more leads){" "}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         <header className="flex items-end justify-between flex-wrap gap-3">
