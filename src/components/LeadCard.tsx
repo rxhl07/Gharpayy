@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '@/lib/store';
 import type { Lead, LeadStage } from '@/lib/types';
-import { calculateUrgencyScore, triggerWhatsAppInvite } from '@/lib/leadUtils';
+import {
+    calculateUrgencyScore,
+    triggerWhatsAppInvite,
+    getRevivalPropertyMatch,
+    triggerRevivalWhatsAppInvite
+} from '@/lib/leadUtils';
 
 interface LeadCardProps {
     lead: Lead;
@@ -10,12 +15,16 @@ interface LeadCardProps {
 export const LeadCard: React.FC<LeadCardProps> = ({ lead }) => {
     const setLeadStage = useApp((state) => state.setLeadStage);
     const addNote = useApp((state) => state.addNote);
+    const properties = useApp((state) => state.properties); // Fetch live property inventory
     const activities = useApp((state) => state.activities).filter((a) => a.leadId === lead.id);
 
     const [noteText, setNoteText] = useState('');
 
     // Calculate dynamic urgency score
     const { score, level } = calculateUrgencyScore(lead);
+
+    // Check if dropped lead qualifies for Ghost-Lead Auto-Revival
+    const matchedProperty = getRevivalPropertyMatch(lead, properties);
 
     const badgeColor =
         level === 'High'
@@ -45,6 +54,12 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead }) => {
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
                             {level} ({score})
                         </span>
+                        {/* Auto-Revival Badge */}
+                        {matchedProperty && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-300 animate-pulse">
+                                🔥 Deal Match
+                            </span>
+                        )}
                     </div>
                     <p className="text-xs text-gray-500">{lead.phone} • {lead.preferredArea}</p>
                 </div>
@@ -53,7 +68,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead }) => {
                 </span>
             </div>
 
-            {/* Stage Selector & WhatsApp Trigger */}
+            {/* Stage Selector & Action Buttons */}
             <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-gray-500 uppercase">Stage:</label>
                 <select
@@ -69,14 +84,27 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead }) => {
                     <option value="dropped">Dropped ❌</option>
                 </select>
 
-                {/* WhatsApp Invite Button */}
-                <button
-                    onClick={() => triggerWhatsAppInvite(lead)}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md transition-colors flex items-center gap-1"
-                    title="Send WhatsApp Invite"
-                >
-                    💬 Invite
-                </button>
+                {/* Conditional WhatsApp Action: Auto-Revival vs Standard Invite */}
+                {matchedProperty ? (
+                    <button
+                        onClick={() => {
+                            const price = (matchedProperty as any).basePrice ?? (matchedProperty as any).startingPrice ?? (matchedProperty as any).rent ?? 0;
+                            triggerRevivalWhatsAppInvite(lead, matchedProperty.name, price);
+                        }}
+                        className="px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded-md transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
+                        title={`Revive Lead: ${matchedProperty.name} available`}
+                    >
+                        🔥 Revive
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => triggerWhatsAppInvite(lead)}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Send WhatsApp Invite"
+                    >
+                        💬 Invite
+                    </button>
+                )}
             </div>
 
             {/* Inline Notes Logger */}

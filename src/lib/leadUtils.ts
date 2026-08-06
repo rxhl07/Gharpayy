@@ -1,44 +1,65 @@
-import type { Lead } from './types';
+import type { Lead, Property } from './types';
 
-/**
- * Calculates a 0-100 Lead Urgency Score based on move-in timeline and budget.
- */
-export const calculateUrgencyScore = (lead: Lead): { score: number; level: 'High' | 'Medium' | 'Low' } => {
-    let score = 0;
+// Calculates dynamic urgency score based on lead properties
+export function calculateUrgencyScore(lead: Lead): { score: number; level: 'High' | 'Medium' | 'Low' } {
+    let score = 50; // Base score
 
-    // Budget threshold scoring (Max 50 pts)
-    if (lead.budget >= 15000) {
-        score += 50;
-    } else if (lead.budget >= 12000) {
-        score += 35;
-    } else {
-        score += 20;
-    }
+    // Budget weighting
+    if (lead.budget >= 20000) score += 30;
+    else if (lead.budget >= 15000) score += 15;
 
-    // Intent / Stage boost (Max 50 pts)
-    if (lead.intent === 'hot' || lead.stage === 'negotiation') {
-        score += 50;
-    } else if (lead.intent === 'warm' || lead.stage === 'tour-scheduled') {
-        score += 30;
-    } else {
-        score += 15;
-    }
+    // Stage weighting
+    if (lead.stage === 'negotiation') score += 20;
+    else if (lead.stage === 'tour-scheduled' || lead.stage === 'tour-done') score += 15;
+    else if (lead.stage === 'dropped') score = 10;
 
-    const level = score >= 75 ? 'High' : score >= 50 ? 'Medium' : 'Low';
-    return { score, level };
-};
+    // Determine level badge
+    let level: 'High' | 'Medium' | 'Low' = 'Low';
+    if (score >= 80) level = 'High';
+    else if (score >= 50) level = 'Medium';
 
-/**
- * Opens a WhatsApp direct link pre-filled with property visit invitation text.
- */
-export const triggerWhatsAppInvite = (lead: Lead): void => {
+    return { score: Math.min(score, 100), level };
+}
+
+// Standard 1-Click WhatsApp Invite Trigger
+export function triggerWhatsAppInvite(lead: Lead) {
     const cleanPhone = lead.phone.replace(/[^0-9]/g, '');
+    const formattedPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+
     const message = encodeURIComponent(
-        `Hi ${lead.name}! Thanks for reaching out to Gharpayy properties in ${lead.preferredArea}. ` +
-        `We have great rooms matching your budget of ₹${lead.budget.toLocaleString('en-IN')}/mo. ` +
-        `Would you like to schedule a site visit this week?`
+        `Hi ${lead.name}! 👋 Thank you for inquiring about properties in ${lead.preferredArea} with Gharpayy. We have great options matching your budget of ₹${lead.budget.toLocaleString('en-IN')}/mo. When would be a good time for a quick site visit?`
     );
 
-    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${message}`;
-    window.open(whatsappUrl, '_blank');
-};
+    window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
+}
+
+// ==========================================
+// 🔥 GHOST-LEAD AUTO-REVIVAL FUNCTIONS
+// ==========================================
+
+// Check if a dropped lead matches available property inventory
+export function getRevivalPropertyMatch(lead: Lead, properties: Property[] = []): Property | null {
+    if (lead.stage !== 'dropped') return null;
+
+    // Safely resolve property price regardless of property key naming
+    return properties.find((p) => {
+        const propertyPrice = (p as any).basePrice ?? (p as any).startingPrice ?? (p as any).rent ?? 0;
+        return (
+            p.area.toLowerCase() === lead.preferredArea.toLowerCase() &&
+            p.vacantBeds > 0 &&
+            propertyPrice <= lead.budget
+        );
+    }) || null;
+}
+
+// Trigger tailored WhatsApp re-engagement deal pitch
+export function triggerRevivalWhatsAppInvite(lead: Lead, propertyName: string, price: number) {
+    const cleanPhone = lead.phone.replace(/[^0-9]/g, '');
+    const formattedPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+
+    const message = encodeURIComponent(
+        `Hey ${lead.name}! 👋 A bed just opened up at ${propertyName} in ${lead.preferredArea} for ₹${price.toLocaleString('en-IN')}/mo (matching your target budget!). Would you like to schedule a quick tour today before it fills up?`
+    );
+
+    window.open(`https://wa.me/${formattedPhone}?text=${message}`, '_blank');
+}
